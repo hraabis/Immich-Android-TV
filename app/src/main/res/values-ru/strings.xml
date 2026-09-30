@@ -254,6 +254,7 @@
     <string name="order_alphabetically_za">По алфавиту (Я–А)</string>
     <string name="order_newest_oldest">Новые — Старые</string>
     <string name="order_oldest_newest">Старые — Новые</string>
+    <string name="order_newest_oldest_date_oldest_newest_time">Новые — Старые День, Старые — Новые Время</string>
     <string name="order_last_updated">Сначала новые</string>
     <string name="order_least_updated">Сначала старые</string>
 

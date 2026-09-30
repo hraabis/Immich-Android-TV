@@ -17,7 +17,7 @@ class AllAssetFragment : GenericAssetFragment() {
         return apiClient.listAssets(page,
             pageCount,
             false,
-            if (currentSort == PhotosOrder.NEWEST_OLDEST) "desc" else "asc",
+            if (currentSort == PhotosOrder.OLDEST_NEWEST) "asc" else "desc",
             contentType = currentFilter).map { it.assets }
     }
 

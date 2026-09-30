@@ -263,6 +263,7 @@
     <string name="order_alphabetically_az">Alphabetically (A-Z)</string>
     <string name="order_alphabetically_za">Alphabetically (Z-A)</string>
     <string name="order_newest_oldest">Newest - Oldest</string>
+    <string name="order_newest_oldest_date_oldest_newest_time">Newest - Oldest Day, Oldest - Newest Time</string>
     <string name="order_oldest_newest">Oldest - Newest</string>
     <string name="order_last_updated">Last updated</string>
     <string name="order_least_updated">Least updated</string>

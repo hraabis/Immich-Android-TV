@@ -34,7 +34,7 @@ class AlbumDetailsFragment : GenericAssetFragment() {
         return apiClient.listAssets(
             page = page,
             pageCount = pageCount,
-            order = if (currentSort == PhotosOrder.NEWEST_OLDEST) "desc" else "asc",
+            order = if (currentSort == PhotosOrder.OLDEST_NEWEST) "asc" else "desc",
             contentType = currentFilter,
             albumIds = listOf(albumId)
         ).map { it.assets.map { a -> a.copy(albumName = albumName) } }
