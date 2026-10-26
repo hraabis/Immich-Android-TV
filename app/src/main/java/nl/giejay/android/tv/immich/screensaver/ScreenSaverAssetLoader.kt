@@ -25,6 +25,7 @@ import nl.giejay.android.tv.immich.shared.prefs.SCREENSAVER_ALBUMS
 import nl.giejay.android.tv.immich.shared.prefs.SCREENSAVER_ANIMATE_ASSET_SLIDE
 import nl.giejay.android.tv.immich.shared.prefs.SCREENSAVER_INCLUDE_VIDEOS
 import nl.giejay.android.tv.immich.shared.prefs.SCREENSAVER_INTERVAL
+import nl.giejay.android.tv.immich.shared.prefs.SCREENSAVER_PEOPLE
 import nl.giejay.android.tv.immich.shared.prefs.SCREENSAVER_PLAY_SOUND
 import nl.giejay.android.tv.immich.shared.prefs.SCREENSAVER_SHOW_DATE_TOP_LEFT
 import nl.giejay.android.tv.immich.shared.prefs.SCREENSAVER_TYPE
@@ -45,6 +46,7 @@ import nl.giejay.mediaslider.config.MediaSliderConfiguration
 import nl.giejay.mediaslider.util.LoadMore
 import nl.giejay.mediaslider.util.LoadMoreResult
 import timber.log.Timber
+import java.util.UUID
 
 // internal so app/src/test can call it directly without instantiating ScreenSaverService
 internal fun <T> Either<String, T>.getOrElseLogged(logContext: String, default: T): T =
@@ -150,7 +152,11 @@ class ScreenSaverAssetLoader(
 
         if (ScreenSaverType.ALBUMS == PreferenceManager.get(SCREENSAVER_TYPE)) {
             loadImagesFromAlbums(PreferenceManager.get(SCREENSAVER_ALBUMS).toList())
-        } else {
+        }
+        else if (ScreenSaverType.PEOPLE == PreferenceManager.get(SCREENSAVER_TYPE)) {
+            loadImagesFromPeople(PreferenceManager.get(SCREENSAVER_PEOPLE).toList())
+        }
+        else {
             val screenSaverType = PreferenceManager.get(SCREENSAVER_TYPE)
             filteredAssetLoader.load({ loadNextAssets(screenSaverType) }).fold(
                 ifLeft = { error ->
@@ -251,6 +257,71 @@ class ScreenSaverAssetLoader(
             ))
         } else {
             return apiClient.listAssetsFromAlbum(albums, contentType, pageCount = MAX_SEARCH_PAGE_SIZE).map { AssetResponse(it.assets.shuffled(), it.canLoadMore) }
+        }
+    }
+
+    private suspend fun loadImagesFromPeople(people: List<String>) {
+        try {
+            if (people.isNotEmpty()) {
+                val response = filteredAssetLoader.load(fetch =
+                    {
+                        loadNextAssetsFromPeople(people, random = true).fold(
+                            {
+                                Timber.w("Could not load random assets for people $people, falling back to all album assets")
+                                loadNextAssetsFromPeople(people, random = false)
+                            },
+                            {
+                                Either.Right(it)
+                            }
+                        )
+                    },
+                    retry = {
+                        Timber.w("Random asset search for album was empty for people $people, now using the regular search assets in album endpoint")
+                        loadNextAssetsFromPeople(people, random = false)
+                    }
+                ).getOrElse { AssetResponse(emptyList(), false) }
+
+                setInitialAssets(
+                    response.assets.shuffled(),
+                    if (response.canLoadMore) {
+                        createLoadMore { loadNextAssetsFromPeople(people, random = false) }
+                    } else null
+                )
+            } else {
+                failAndExit(R.string.set_people_screensaver_error)
+            }
+        } catch (e: Exception) {
+            Timber.e(e, "Could not fetch assets from Immich for Screensaver")
+            failAndExit(R.string.could_not_load_assets)
+        }
+    }
+
+    private suspend fun loadNextAssetsFromPeople(people: List<String>, random: Boolean = false): Either<String, AssetResponse> {
+        val contentType = if (PreferenceManager.get(SCREENSAVER_INCLUDE_VIDEOS)) ContentType.ALL else ContentType.IMAGE
+        if (random) {
+            val pageCount = (50 / people.size).coerceAtLeast(1)
+            val responses = people.pmap { personId ->
+                apiClient.listAssets(
+                    page = 1,
+                    pageCount = pageCount,
+                    random = true,
+                    contentType = contentType,
+                    personIds = listOf(UUID.fromString(personId))
+                )
+            }
+            responses.firstOrNull { it.isLeft() }?.let { return it }
+            return Either.Right(AssetResponse(
+                responses.flatMap { it.getOrElse { AssetResponse(emptyList(), true) }.assets }.shuffled(),
+                true
+            ))
+        } else {
+            val personIds = people.map {UUID.fromString(it)}.toMutableList()
+            return apiClient.listAssets(
+                page = 1,
+                pageCount = MAX_SEARCH_PAGE_SIZE,
+                random = false,
+                contentType = contentType,
+                personIds = personIds).map { AssetResponse(it.assets.shuffled(), it.canLoadMore) }
         }
     }
 
