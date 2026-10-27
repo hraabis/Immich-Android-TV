@@ -139,6 +139,7 @@ class ScreenSaverAssetLoader(
     private val filteredAssetLoader = FilteredAssetLoader(
         filterAssets = { filterExcludedAssets(it, excludedAssetIds) }
     )
+    private val loadedPeopleAssetIds = mutableSetOf<String>()
 
     fun start(): Job = scope.launch(Dispatchers.IO) {
         val excludedAlbums = PreferenceManager.get(EXCLUDE_ASSETS_IN_ALBUM)
@@ -298,7 +299,7 @@ class ScreenSaverAssetLoader(
 
     private suspend fun loadNextAssetsFromPeople(people: List<String>, random: Boolean = false): Either<String, AssetResponse> {
         val contentType = if (PreferenceManager.get(SCREENSAVER_INCLUDE_VIDEOS)) ContentType.ALL else ContentType.IMAGE
-        if (random) {
+        val response = if (random) {
             val pageCount = (50 / people.size).coerceAtLeast(1)
             val responses = people.pmap { personId ->
                 apiClient.listAssets(
@@ -310,19 +311,20 @@ class ScreenSaverAssetLoader(
                 )
             }
             responses.firstOrNull { it.isLeft() }?.let { return it }
-            return Either.Right(AssetResponse(
+            Either.Right(AssetResponse(
                 responses.flatMap { it.getOrElse { AssetResponse(emptyList(), true) }.assets }.shuffled(),
                 true
             ))
         } else {
             val personIds = people.map {UUID.fromString(it)}.toMutableList()
-            return apiClient.listAssets(
+            apiClient.listAssets(
                 page = 1,
                 pageCount = MAX_SEARCH_PAGE_SIZE,
                 random = false,
                 contentType = contentType,
                 personIds = personIds).map { AssetResponse(it.assets.shuffled(), it.canLoadMore) }
         }
+        return response.map { it.copy(assets = it.assets.filter { asset -> loadedPeopleAssetIds.add(asset.id) }) }
     }
 
     private suspend fun failAndExit(@StringRes messageRes: Int) = withContext(Dispatchers.Main) {
