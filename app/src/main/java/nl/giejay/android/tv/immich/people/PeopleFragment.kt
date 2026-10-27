@@ -25,20 +25,14 @@ class PeopleFragment : VerticalCardGridFragment<Person>() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        selectionTypeKey = SCREENSAVER_PEOPLE
-//        when (selectionType) {
-//            SelectionType.SET_SCREENSAVER -> {
-//                SCREENSAVER_PEOPLE
-//            }
-//
-//            SelectionType.EXCLUDED_ALBUMS -> {
-//                EXCLUDE_PEOPLE_IN_ALBUM
-//            }
-//
-//            SelectionType.SET_CHANNEL_ALBUMS -> {
-//                CHANNEL_PEOPLE
-//            }
-//        }
+        selectionTypeKey =
+        when (selectionType) {
+            SelectionType.SET_SCREENSAVER -> {
+                SCREENSAVER_PEOPLE
+            }
+            else -> { SCREENSAVER_PEOPLE } //Other options not required at this time: EXCLUDED_ALBUMS, SET_CHANNEL_ALBUMS
+        }
+
         PreferenceManager.subscribe(ALBUMS_SORTING) {
             resortItems()
         }
