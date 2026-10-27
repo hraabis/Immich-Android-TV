@@ -28,6 +28,7 @@ import nl.giejay.android.tv.immich.shared.prefs.SCREENSAVER_INTERVAL
 import nl.giejay.android.tv.immich.shared.prefs.SCREENSAVER_PEOPLE
 import nl.giejay.android.tv.immich.shared.prefs.SCREENSAVER_PLAY_SOUND
 import nl.giejay.android.tv.immich.shared.prefs.SCREENSAVER_SHOW_DATE_TOP_LEFT
+import nl.giejay.android.tv.immich.shared.prefs.SCREENSAVER_SHOW_FAVORITES_ONLY
 import nl.giejay.android.tv.immich.shared.prefs.SCREENSAVER_TYPE
 import nl.giejay.android.tv.immich.shared.prefs.SLIDER_ANIMATION_SPEED
 import nl.giejay.android.tv.immich.shared.prefs.SLIDER_DPAD_SEEK_IN_VIDEO
@@ -143,8 +144,9 @@ class ScreenSaverAssetLoader(
 
     fun start(): Job = scope.launch(Dispatchers.IO) {
         val excludedAlbums = PreferenceManager.get(EXCLUDE_ASSETS_IN_ALBUM)
+        val isFavorite = PreferenceManager.get(SCREENSAVER_SHOW_FAVORITES_ONLY)
         if (excludedAlbums.isNotEmpty()) {
-            excludedAssetIds = apiClient.listAssetsFromAlbum(excludedAlbums.toList(), pageCount = MAX_SEARCH_PAGE_SIZE)
+            excludedAssetIds = apiClient.listAssetsFromAlbum(excludedAlbums.toList(), pageCount = MAX_SEARCH_PAGE_SIZE, isFavorite = isFavorite)
                 .getOrElseLogged("excluded albums $excludedAlbums", AssetResponse(emptyList(), false))
                 .assets
                 .map { it.id }
@@ -178,12 +180,13 @@ class ScreenSaverAssetLoader(
 
     private suspend fun loadNextAssets(screenSaverType: ScreenSaverType): Either<String, AssetResponse> {
         val contentType = if (PreferenceManager.get(SCREENSAVER_INCLUDE_VIDEOS)) ContentType.ALL else ContentType.IMAGE
+        val isFavorite = PreferenceManager.get(SCREENSAVER_SHOW_FAVORITES_ONLY)
         val page = currentPage
         currentPage += 1
         return when (screenSaverType) {
-            ScreenSaverType.RECENT -> apiClient.recentAssets(page, PAGE_COUNT, contentType = contentType)
-            ScreenSaverType.SIMILAR_TIME_PERIOD -> apiClient.similarAssets(page, PAGE_COUNT, contentType = contentType)
-            else -> apiClient.listAssets(page, PAGE_COUNT, true, contentType = contentType)
+            ScreenSaverType.RECENT -> apiClient.recentAssets(page, PAGE_COUNT, contentType = contentType, isFavorite = isFavorite)
+            ScreenSaverType.SIMILAR_TIME_PERIOD -> apiClient.similarAssets(page, PAGE_COUNT, contentType = contentType, isFavorite = isFavorite)
+            else -> apiClient.listAssets(page, PAGE_COUNT, true, contentType = contentType, isFavorite = isFavorite)
         }
     }
 
@@ -240,6 +243,7 @@ class ScreenSaverAssetLoader(
 
     private suspend fun loadNextAssetsFromAlbums(albums: List<String>, random: Boolean = false): Either<String, AssetResponse> {
         val contentType = if (PreferenceManager.get(SCREENSAVER_INCLUDE_VIDEOS)) ContentType.ALL else ContentType.IMAGE
+        val isFavorite = PreferenceManager.get(SCREENSAVER_SHOW_FAVORITES_ONLY)
         if (random) {
             val pageCount = (50 / albums.size).coerceAtLeast(1)
             val responses = albums.pmap { albumId ->
@@ -248,7 +252,8 @@ class ScreenSaverAssetLoader(
                     pageCount = pageCount,
                     random = true,
                     contentType = contentType,
-                    albumIds = listOf(albumId)
+                    albumIds = listOf(albumId),
+                    isFavorite = isFavorite
                 )
             }
             responses.firstOrNull { it.isLeft() }?.let { return it }
@@ -257,7 +262,7 @@ class ScreenSaverAssetLoader(
                 true
             ))
         } else {
-            return apiClient.listAssetsFromAlbum(albums, contentType, pageCount = MAX_SEARCH_PAGE_SIZE).map { AssetResponse(it.assets.shuffled(), it.canLoadMore) }
+            return apiClient.listAssetsFromAlbum(albums, contentType, pageCount = MAX_SEARCH_PAGE_SIZE, isFavorite = isFavorite).map { AssetResponse(it.assets.shuffled(), it.canLoadMore) }
         }
     }
 
@@ -299,6 +304,7 @@ class ScreenSaverAssetLoader(
 
     private suspend fun loadNextAssetsFromPeople(people: List<String>, random: Boolean = false): Either<String, AssetResponse> {
         val contentType = if (PreferenceManager.get(SCREENSAVER_INCLUDE_VIDEOS)) ContentType.ALL else ContentType.IMAGE
+        val isFavorite = PreferenceManager.get(SCREENSAVER_SHOW_FAVORITES_ONLY)
         val response = if (random) {
             val pageCount = (50 / people.size).coerceAtLeast(1)
             val responses = people.pmap { personId ->
@@ -307,7 +313,8 @@ class ScreenSaverAssetLoader(
                     pageCount = pageCount,
                     random = true,
                     contentType = contentType,
-                    personIds = listOf(UUID.fromString(personId))
+                    personIds = listOf(UUID.fromString(personId)),
+                    isFavorite = isFavorite
                 )
             }
             responses.firstOrNull { it.isLeft() }?.let { return it }
@@ -322,7 +329,8 @@ class ScreenSaverAssetLoader(
                 pageCount = MAX_SEARCH_PAGE_SIZE,
                 random = false,
                 contentType = contentType,
-                personIds = personIds).map { AssetResponse(it.assets.shuffled(), it.canLoadMore) }
+                personIds = personIds,
+                isFavorite = isFavorite).map { AssetResponse(it.assets.shuffled(), it.canLoadMore) }
         }
         return response.map { it.copy(assets = it.assets.filter { asset -> loadedPeopleAssetIds.add(asset.id) }) }
     }
